@@ -2052,6 +2052,10 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_EXPLICIT_INVAL_DATA;
 		if (inargflags & FUSE_SETXATTR_EXT)
 			se->conn.capable |= FUSE_CAP_SETXATTR_EXT;
+		if (inargflags & FUSE_OWNER_UID_GID_EXT)
+			se->conn.capable |= FUSE_CAP_OWNER_UID_GID_EXT;
+		if (inargflags & FUSE_ALLOW_IDMAP)
+			se->conn.capable |= FUSE_CAP_ALLOW_IDMAP;
 		if (!(inargflags & FUSE_MAX_PAGES)) {
 			size_t max_bufsize =
 				FUSE_DEFAULT_MAX_PAGES_PER_REQ * getpagesize()
@@ -2208,6 +2212,10 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		 */
 		outarg.max_stack_depth = se->conn.max_backing_stack_depth + 1;
 	}
+	if (se->conn.want & FUSE_CAP_OWNER_UID_GID_EXT)
+		outargflags |= FUSE_OWNER_UID_GID_EXT;
+	if (se->conn.want & FUSE_CAP_ALLOW_IDMAP)
+		outargflags |= FUSE_ALLOW_IDMAP;
 
 	outargflags |= FUSE_CREATE_SUPP_GROUP;
 
@@ -2714,6 +2722,7 @@ static int fuse_process_req_ext(struct fuse_req *req, struct fuse_in_header *in)
 	size_t extlen = in->total_extlen * 8;
 	struct fuse_ext_header *xh = end - extlen;
 	struct fuse_supp_groups *sg;
+	struct fuse_owner_uid_gid *owner_creds;
 	unsigned int i;
 
 	assert(extlen < in->len);
@@ -2728,6 +2737,13 @@ static int fuse_process_req_ext(struct fuse_req *req, struct fuse_in_header *in)
 
 			for (i = 0; i < sg->nr_groups; i++)
 				req->ctx.groups[i] = sg->groups[i];
+		} else if (xh->type == FUSE_EXT_OWNER_UID_GID) {
+			owner_creds = (struct fuse_owner_uid_gid *) &xh[1];
+
+			req->ctx.owner_uid = owner_creds->uid;
+			req->ctx.owner_gid = owner_creds->gid;
+
+			fuse_log(FUSE_LOG_ERR, "inode owner uid/gid: %u/%u\n", req->ctx.owner_uid, req->ctx.owner_gid);
 		}
 	}
 	assert(xh == end);
@@ -2800,8 +2816,8 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	}
 
 	req->unique = in->unique;
-	req->ctx.uid = in->uid;
-	req->ctx.gid = in->gid;
+	req->ctx.uid = req->ctx.owner_uid = in->uid;
+	req->ctx.gid = req->ctx.owner_gid = in->gid;
 	req->ctx.pid = in->pid;
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 

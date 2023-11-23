@@ -89,6 +89,10 @@ static void pc_init(void *userdata,
 			printf("\tFUSE_CAP_HANDLE_KILLPRIV_V2\n");
 	if(conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
 			printf("\tFUSE_CAP_DIRECT_IO_ALLOW_MMAP\n");
+	if(conn->capable & FUSE_CAP_OWNER_UID_GID_EXT)
+			printf("\tFUSE_CAP_OWNER_UID_GID_EXT\n");
+	if(conn->capable & FUSE_CAP_ALLOW_IDMAP)
+			printf("\tFUSE_CAP_ALLOW_IDMAP\n");
 	fuse_session_exit(se);
 }
 

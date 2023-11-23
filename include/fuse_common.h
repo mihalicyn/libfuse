@@ -490,6 +490,12 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_PASSTHROUGH      (1 << 29)
 
 /**
+ * TBD
+ */
+#define FUSE_CAP_OWNER_UID_GID_EXT (1 << 30)
+#define FUSE_CAP_ALLOW_IDMAP       (1 << 31)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine

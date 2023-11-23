@@ -127,6 +127,12 @@ struct fuse_ctx {
 
 	/** Supplementary groups */
 	gid_t *groups;
+
+	/** inode owner UID */
+	uid_t owner_uid;
+
+	/** inode owner GID */
+	gid_t owner_gid;
 };
 
 struct fuse_forget_data {
