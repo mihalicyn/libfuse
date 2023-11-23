@@ -121,6 +121,12 @@ struct fuse_ctx {
 
 	/** Umask of the calling process */
 	mode_t umask;
+
+	/** Number of supplementary groups */
+	unsigned int nr_groups;
+
+	/** Supplementary groups */
+	gid_t *groups;
 };
 
 struct fuse_forget_data {

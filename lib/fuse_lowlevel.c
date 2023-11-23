@@ -126,6 +126,7 @@ static void destroy_req(fuse_req_t req)
 {
 	assert(req->ch == NULL);
 	pthread_mutex_destroy(&req->lock);
+	free(req->ctx.groups);
 	free(req);
 }
 
@@ -2208,6 +2209,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.max_stack_depth = se->conn.max_backing_stack_depth + 1;
 	}
 
+	outargflags |= FUSE_CREATE_SUPP_GROUP;
+
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
 		outarg.flags2 = outargflags >> 32;
@@ -2705,6 +2708,40 @@ void fuse_session_process_buf(struct fuse_session *se,
 	fuse_session_process_buf_int(se, buf, NULL);
 }
 
+static int fuse_process_req_ext(struct fuse_req *req, struct fuse_in_header *in)
+{
+	void *end = (void *) in + in->len;
+	size_t extlen = in->total_extlen * 8;
+	struct fuse_ext_header *xh = end - extlen;
+	struct fuse_supp_groups *sg;
+	unsigned int i;
+
+	assert(extlen < in->len);
+	for (; (void *) xh < end; xh = (void *) xh + xh->size) {
+		if (xh->type == FUSE_EXT_GROUPS) {
+			sg = (void *) &xh[1];
+			req->ctx.nr_groups = sg->nr_groups;
+			req->ctx.groups = calloc(sg->nr_groups,
+						 sizeof(req->ctx.groups[0]));
+			if (!req->ctx.groups)
+				return -ENOMEM;
+
+			for (i = 0; i < sg->nr_groups; i++)
+				req->ctx.groups[i] = sg->groups[i];
+		}
+	}
+	assert(xh == end);
+
+	if (req->se->debug && req->ctx.nr_groups) {
+		fuse_log(FUSE_LOG_DEBUG, "groups: %u", req->ctx.groups[0]);
+		for (i = 1; i < req->ctx.nr_groups; i++)
+			fuse_log(FUSE_LOG_DEBUG, ", %u", req->ctx.groups[i]);
+		fuse_log(FUSE_LOG_DEBUG, "\n");
+	}
+
+	return 0;
+}
+
 void fuse_session_process_buf_int(struct fuse_session *se,
 				  const struct fuse_buf *buf, struct fuse_chan *ch)
 {
@@ -2835,8 +2872,15 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		do_write_buf(req, in->nodeid, inarg, buf);
 	else if (in->opcode == FUSE_NOTIFY_REPLY)
 		do_notify_reply(req, in->nodeid, inarg, buf);
-	else
+	else {
+		assert(buf->size == in->len);
+		res = fuse_process_req_ext(req, in);
+		err = -res;
+		if (res < 0)
+			goto reply_err;
+
 		fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
+	}
 
 out_free:
 	free(mbuf);
